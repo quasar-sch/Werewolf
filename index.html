@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>어그로우 : 학급 늑대인간 게임</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <!-- QR 코드 생성 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+  <!-- 상단 고정 헤더 -->
+  <header class="top-bar">
+    <div class="brand" onclick="location.href=location.pathname">
+      <span class="brand-badge">WEREWOLF</span>
+      <span class="brand-title">어그로우 (WereWolf)</span>
+    </div>
+    <div class="top-actions">
+      <span id="sheetBadge" class="status-pill">📊 기본 역할 19종</span>
+      <span id="connBadge" class="status-pill offline">서버 연결중...</span>
+      <button class="btn-sm" onclick="openRoleBookModal()">📖 직업 도감</button>
+    </div>
+  </header>
+
+  <!-- [화면 1] 메인 홈 화면 -->
+  <main id="homeView" class="view active">
+    <div class="center-card">
+      <span class="hero-tag">CLASSROOM MAFIA ENGINE · MAX 30 PLAYERS</span>
+      <h1 class="hero-title">늑대인간 : 어그로우</h1>
+      <p class="hero-sub">교사 PC(전자칠판)로 진행하고 학생 태블릿으로 행동하는 자동 판정 마피아</p>
+
+      <div class="mode-grid">
+        <button class="btn btn-primary" onclick="enterTeacherStage()">🖥️ 교사 PC · 전자칠판 방 만들기</button>
+      </div>
+
+      <div class="divider"><span>학생 태블릿 & 교사 보조폰 접속</span></div>
+
+      <div class="join-box">
+        <input type="text" id="joinRoomInput" class="input-field" placeholder="4자리 방 코드 (예: AB12)" maxlength="6">
+        <input type="text" id="joinNameInput" class="input-field" placeholder="학번 이름 (예: 15번 김철수)" maxlength="12">
+        <button class="btn btn-accent" onclick="joinAsStudent()">📱 학생 태블릿으로 입장하기</button>
+        <button class="btn-sm" style="margin-top:4px;" onclick="joinAsTeacherMobile()">🕵️ 교사 스마트폰(시크릿 관제)으로 입장</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- [화면 2] 교사 PC + 전자칠판 통합 스테이지 화면 (미러링 스포일러 방지) -->
+  <main id="stageView" class="view">
+    <div class="stage-container">
+
+      <!-- 상단: 현재 날짜/페이즈 헤드라인 + 타이머 -->
+      <section class="stage-top-bar">
+        <div class="stage-title-box">
+          <span id="stPhaseBadge" class="hero-tag">WAITING ROOM</span>
+          <h1 id="stHeadline" class="stage-headline">태블릿 카메라로 QR 코드를 스캔해 입장하세요</h1>
+        </div>
+        <div class="stage-meta-box">
+          <div id="stRoomCode" class="stage-room-code">CODE: ----</div>
+          <div id="stTimer" class="stage-timer">--:--</div>
+        </div>
+      </section>
+
+      <!-- 교사 전용 진행 버튼 바 -->
+      <section id="teacherControlBar" class="teacher-ctrl-bar hidden">
+        <div class="ctrl-left">
+          <button class="btn-ctrl amber" onclick="setGamePhase('MAYOR_VOTE')">👑 시장 선거</button>
+          <button class="btn-ctrl primary" onclick="setGamePhase('DAY_DISCUSSION')">☀️ 낮 토론(3분)</button>
+          <button class="btn-ctrl accent" onclick="setGamePhase('DAY_VOTE')">🗳️ 처형 투표</button>
+          <button class="btn-ctrl board" onclick="resolveDayVote()">⚖️ 투표 집행</button>
+          <button class="btn-ctrl night" onclick="setGamePhase('NIGHT')">🌙 밤 전환</button>
+          <button class="btn-ctrl morning" onclick="resolveNightToMorning()">🌅 아침 밝히기(판정)</button>
+        </div>
+        <div class="ctrl-right">
+          <span id="stActionCount" class="status-pill">밤 제출: 0 / 0</span>
+          <button class="btn-sm" onclick="openSecretInspectorModal()">🔒 비밀장부(밤 확인)</button>
+          <button class="btn-sm accent-border" onclick="openReportModal()">📊 결과 인포그래픽/시트 저장</button>
+          <button class="btn-sm danger-text" onclick="destroyRoom()">💥 방 폭파</button>
+        </div>
+      </section>
+
+      <!-- [대기실 상태] 좌측: QR코드 + 입장명단 / 우측: 게임 전 역할·규칙 세팅 -->
+      <div id="stageLobbyGrid" class="stage-lobby-grid">
+        <div class="panel qr-lobby-panel">
+          <div class="qr-card">
+            <div id="qrCanvas"></div>
+            <p>태블릿으로 스캔하면 즉시 입장됩니다</p>
+          </div>
+          <div style="flex:1; display:flex; flex-direction:column; min-height:0;">
+            <div class="panel-header">
+              <h3>입장 완료 학생 (<span id="stJoinCount">0</span> / 30명)</h3>
+            </div>
+            <div id="stLobbyPlayers" class="b-player-grid scroll-y"></div>
+          </div>
+        </div>
+
+        <div class="panel scroll-y">
+          <div class="panel-header">
+            <h2>⚙️ 게임 사전 규칙 & 등장 역할 설정</h2>
+            <button class="btn-sm" onclick="loadRolesFromGoogleSheet(true)">🔄 구글 시트 새로고침</button>
+          </div>
+
+          <label class="opt-row">
+            <span>늑대 진행 모드</span>
+            <select id="optWolfMode" class="select-input">
+              <option value="infect">감염·변이 모드 (최초 1명 + 탐정·약사·부두술사 변이)</option>
+              <option value="classic">클래식 모드 (다수 늑대 다수결 습격)</option>
+            </select>
+          </label>
+          <label class="opt-row">
+            <span>감염 시 변이 늑대(탐정·약사·부두술사) 부여</span>
+            <input type="checkbox" id="optVariantWolf" checked>
+          </label>
+          <label class="opt-row">
+            <span>최초 늑대 아웃 시 후계 늑대 감염 확률(%)</span>
+            <input type="number" id="optInfectProb" class="num-input" value="50" min="0" max="100">
+          </label>
+          <label class="opt-row">
+            <span>하얀 늑대 밤 능력 방식</span>
+            <select id="optWhiteWolfMode" class="select-input">
+              <option value="both">조사 + 처치 동시 사용</option>
+              <option value="one">조사 / 처치 중 택1</option>
+            </select>
+          </label>
+
+          <h3 style="font-size:13.5px; color:var(--primary); margin:12px 0 6px;">등장 특수 직업 인원수 (나머지 인원은 자동 '시민' 배정)</h3>
+          <div id="roleConfigList" class="role-config-list"></div>
+
+          <button class="btn btn-primary" style="margin-top:12px;" onclick="startGameByTeacher()">🚀 역할 배정 및 게임 시작하기</button>
+        </div>
+      </div>
+
+      <!-- [인게임 상태] 전자칠판 공개 전광판 -->
+      <div id="stageGameGrid" class="stage-game-grid hidden">
+        <div class="panel scroll-y">
+          <h3>📢 마을 공개 사건 브리핑</h3>
+          <div id="stPublicFeed" class="public-feed"></div>
+
+          <h3 style="margin-top:18px;">🃏 이번 게임에 등장하는 역할 (클릭 시 도감 확대)</h3>
+          <div id="stActiveRolesStrip" class="active-roles-strip"></div>
+        </div>
+
+        <div class="panel scroll-y">
+          <h3>👥 마을 생존자 현황판</h3>
+          <div id="stGamePlayers" class="b-player-grid"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- [화면 3] 학생 태블릿 화면 -->
+  <main id="studentView" class="view">
+    <div class="student-shell">
+      <div class="s-header">
+        <div>
+          <span id="sNameBadge" class="s-name">학생 이름</span>
+          <span id="sAliveBadge" class="status-pill online">생존</span>
+        </div>
+        <button class="btn-sm" onclick="toggleRoleCard()">🪪 내 직업 카드 접기/펴기</button>
+      </div>
+
+      <div id="sStatusAlert" class="alert-banner hidden"></div>
+
+      <!-- 내 직업 일러스트 카드 (PPT 삽화 표시) -->
+      <div id="sRoleCard" class="role-card">
+        <div class="role-illust-wrap">
+          <img id="sRoleImg" class="role-illust-img hidden" alt="직업 삽화" onerror="this.classList.add('hidden'); document.getElementById('sRoleFallbackIcon').classList.remove('hidden');">
+          <div id="sRoleFallbackIcon" class="role-fallback-icon">🎭</div>
+        </div>
+        <div class="role-info-wrap">
+          <div class="role-card-top">
+            <span id="sTeamBadge" class="hero-tag">시민 진영</span>
+            <span id="sInfectBadge" class="infect-badge hidden">🐺 늑대 감염됨</span>
+          </div>
+          <h2 id="sRoleName" class="role-title">대기실 입장 완료</h2>
+          <p id="sRoleDesc" class="role-desc">교사가 게임을 시작하면 여기에 당신의 직업 삽화와 능력이 표시됩니다.</p>
+          <div id="sWolfTeammates" class="teammate-box hidden"></div>
+        </div>
+      </div>
+
+      <div id="sInstantResultBox" class="instant-result hidden"></div>
+
+      <div class="s-action-area">
+        <h3 id="sActionTitle">진행 대기 중</h3>
+        <p id="sActionSub" class="s-sub">선생님의 진행 안내를 기다려주세요.</p>
+
+        <div id="sSubModeBar" class="sub-mode-bar hidden"></div>
+
+        <!-- 사망자(유령) 전용: 영혼술사에게 1글자 단서 보내기 -->
+        <div id="sGhostClueBox" class="ghost-clue-box hidden">
+          <p>🔮 당신은 유령입니다. 밤마다 영혼술사에게 <b>딱 1글자</b> 단서를 보낼 수 있습니다.</p>
+          <div class="clue-row">
+            <input type="text" id="ghostClueInput" class="clue-input" maxlength="1" placeholder="1자">
+            <button class="btn btn-primary" onclick="sendGhostClue()">단서 전송</button>
+          </div>
+        </div>
+
+        <div id="sTargetGrid" class="s-target-grid"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- [모달 1] 교사 비밀장부 (밤에 학생들이 엎드렸을 때 열거나 교사 스마트폰에서 상시 확인) -->
+  <div id="secretInspectorModal" class="modal-overlay">
+    <div class="modal-card modal-wide">
+      <div class="panel-header">
+        <h3>🕵️ 교사 전용 비밀 관제 장부 (전자칠판 노출 주의!)</h3>
+        <button class="btn-sm" onclick="closeSecretInspectorModal()">❌ 즉시 닫기</button>
+      </div>
+      <p class="modal-desc">※ 아침 밝히기 버튼을 누르면 이 창은 자동으로 닫힙니다. 학생의 생사·침묵을 수동 조작할 수 있습니다.</p>
+      <div id="inspectorPlayerGrid" class="t-player-grid scroll-y" style="max-height:300px;"></div>
+      <h4 style="margin:10px 0 4px; color:var(--amber);">📜 실시간 밤 행동 제출 내역</h4>
+      <div id="inspectorActionLog" class="log-box" style="max-height:150px;"></div>
+    </div>
+  </div>
+
+  <!-- [모달 2] 게임 결과 인포그래픽 포스터(.png) & 스프레드시트(.csv) 저장 창 -->
+  <div id="reportModal" class="modal-overlay">
+    <div class="modal-card modal-wide">
+      <div class="panel-header">
+        <h3>📊 게임 결과 인포그래픽 & 스프레드시트 로그 저장</h3>
+        <button class="btn-sm" onclick="closeReportModal()">닫기</button>
+      </div>
+      <p class="modal-desc">서버에서 방을 폭파하기 전에 이번 판의 모든 정체와 밤 행동 연대기를 이미지 포스터나 엑셀/시트로 소장하세요.</p>
+
+      <div class="export-btn-bar">
+        <button class="btn-ctrl primary" onclick="downloadInfographicPNG()">🖼️ 인포그래픽 포스터(.png) 다운로드</button>
+        <button class="btn-ctrl amber" onclick="downloadLogsCSV()">📊 엑셀/스프레드시트(.csv) 다운로드</button>
+        <button class="btn-ctrl board" onclick="copyLogsToClipboard()">📋 구글 시트 붙여넣기용 복사</button>
+      </div>
+
+      <div class="canvas-preview-wrap scroll-y">
+        <canvas id="infographicCanvas" width="1200" height="900"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- [모달 3] PPT 역할 도감 & 삽화 갤러리 -->
+  <div id="roleBookModal" class="modal-overlay">
+    <div class="modal-card modal-wide">
+      <div class="panel-header">
+        <h3>📖 어그로우(WereWolf) 직업 도감 & 규칙서</h3>
+        <button class="btn-sm" onclick="closeRoleBookModal()">닫기</button>
+      </div>
+      <div id="roleBookGrid" class="role-book-grid scroll-y"></div>
+    </div>
+  </div>
+
+</body>
+</html>
