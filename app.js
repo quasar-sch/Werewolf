@@ -16,7 +16,7 @@ const FIREBASE_CONFIG = {
 const ROLE_SHEET_ID = "1Q9RjaCEjCmdcEYB_A7HCnwN4H26P_H1LwDEltuPQ29M";
 
 // ★ 교사 스마트폰 시크릿 관제 접속용 PIN 번호
-const TEACHER_PIN = "2026";
+const TEACHER_PIN = "1234";
 
 // 기본 19종 역할 데이터 (구글 시트 미연결 시 기본 작동)
 let ROLES_DB = [
