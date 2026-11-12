@@ -6,17 +6,17 @@
 
 // ★ [필수 입력 1] 파이어베이스 웹앱 설정값 붙여넣기
 const FIREBASE_CONFIG = {
-  apiKey: "여기에_FIREBASE_API_KEY_입력",
-  authDomain: "프로젝트ID.firebaseapp.com",
-  databaseURL: "https://프로젝트ID-default-rtdb.firebaseio.com",
-  projectId: "프로젝트ID"
+  apiKey: "AIzaSyDARCM1xW65-LpMxiMB2XnaC0Jvc08_p1k",
+  authDomain: "class-werewolf.firebaseapp.com",
+  databaseURL: "https://class-werewolf-default-rtdb.firebaseio.com",
+  projectId: "class-werewolf"
 };
 
 // ★ [선택 입력 2] 역할 관리용 구글 스프레드시트 ID (페르미 추정 방식 - '링크가 있는 모든 사용자 뷰어' 공유)
-const ROLE_SHEET_ID = "";
+const ROLE_SHEET_ID = "1Q9RjaCEjCmdcEYB_A7HCnwN4H26P_H1LwDEltuPQ29M";
 
 // ★ 교사 스마트폰 시크릿 관제 접속용 PIN 번호
-const TEACHER_PIN = "1234";
+const TEACHER_PIN = "2026";
 
 // 기본 19종 역할 데이터 (구글 시트 미연결 시 기본 작동)
 let ROLES_DB = [
